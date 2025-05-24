@@ -8,7 +8,6 @@ import {
   Card,
   Form,
   Input,
-  Select,
   Button,
   Table,
   Pagination,
@@ -22,7 +21,6 @@ import {
 import { FileDoneOutlined } from "@ant-design/icons";
 
 const { Title } = Typography;
-const { Option } = Select;
 
 const PRIMARY_COLOR = "#1E9FD9";
 
@@ -42,17 +40,13 @@ interface ApiResponse {
 
 interface FormValues {
   baseUrl: string;
-  utmSource: string;
-  page: number;
-  limit: number;
 }
 
 const ApiRequestTable: React.FC = () => {
   const [form] = Form.useForm<FormValues>();
   const [baseUrl, setBaseUrl] = useState<string>("https://qabul.asianuniversity.uz");
-  const [utmSource, setUtmSource] = useState<string>("919330011");
   const [page, setPage] = useState<number>(1);
-  const [limit, setLimit] = useState<number>(5);
+  const [limit] = useState<number>(5); // Fixed default value
   const [responseData, setResponseData] = useState<Contact[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
@@ -66,7 +60,7 @@ const ApiRequestTable: React.FC = () => {
       const response = await axios.post<ApiResponse>(
         "https://bitrix-mini.asianuniversity.uz/api/contacts",
         {
-          utm_url: `${baseUrl}?utm_source=${utmSource}`,
+          utm_url: `${baseUrl}`,
           page,
           limit,
         },
@@ -81,9 +75,11 @@ const ApiRequestTable: React.FC = () => {
       setResponseData(data);
       setTotal(response.data.total ?? data.length); // Fallback to data length if total is not provided
     } catch (err) {
-      const errorMessage = err instanceof AxiosError 
-        ? err.response?.data?.message || err.message 
-        : "Noma'lum xato yuz berdi";
+     const errorMessage = err instanceof AxiosError && err.response?.data?.error === "utm_source parameter not found in the URL"
+        ? "Ushbu link hech kimga tegishli emas"
+        : err instanceof AxiosError
+          ? err.response?.data?.message || err.message
+          : "Noma'lum xato yuz berdi";
       setError(errorMessage);
       setResponseData([]);
       setTotal(0);
@@ -98,11 +94,11 @@ const ApiRequestTable: React.FC = () => {
       setPage(1); // Reset to page 1 on new submission
       fetchData();
     }).catch(() => {
-      setError("Iltimos, barcha maydonlarni to'ldiring");
+      setError("Iltimos, URL maydonini to'ldiring");
     });
   };
 
-  const columns: TableColumnsType<Contact> = responseData.length > 0 
+  const columns: TableColumnsType<Contact> = responseData.length > 0
     ? Object.keys(responseData[0]).map((key) => ({
         title: key.replace(/_/g, " "), // Format keys (e.g., LAST_NAME -> LAST NAME)
         dataIndex: key,
@@ -125,14 +121,14 @@ const ApiRequestTable: React.FC = () => {
         }
       >
         <Spin spinning={loading}>
-          <Form 
-            form={form} 
-            onSubmitCapture={handleSubmit} 
+          <Form
+            form={form}
+            onSubmitCapture={handleSubmit}
             layout="vertical"
-            initialValues={{ baseUrl, utmSource, page, limit }}
+            initialValues={{ baseUrl }}
           >
             <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12}>
+              <Col xs={24}>
                 <Form.Item
                   label="Asosiy URL"
                   name="baseUrl"
@@ -146,48 +142,6 @@ const ApiRequestTable: React.FC = () => {
                     onChange={(e) => setBaseUrl(e.target.value)}
                     placeholder="https://example.com"
                   />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  label="UTM Source"
-                  name="utmSource"
-                  rules={[{ required: true, message: "UTM Source kiriting" }]}
-                >
-                  <Input
-                    value={utmSource}
-                    onChange={(e) => setUtmSource(e.target.value)}
-                    placeholder="919330011"
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <Form.Item
-                  label="Sahifa"
-                  name="page"
-                  rules={[{ required: true, message: "Sahifa raqamini kiriting" }]}
-                >
-                  <Input
-                    type="number"
-                    min={1}
-                    value={page}
-                    onChange={(e) => setPage(Number(e.target.value))}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <Form.Item
-                  label="Limit"
-                  name="limit"
-                  rules={[{ required: true, message: "Limitni tanlang" }]}
-                >
-                  <Select value={limit} onChange={(value) => setLimit(Number(value))}>
-                    {[5, 10, 20, 50].map((num) => (
-                      <Option key={num} value={num}>
-                        {num}
-                      </Option>
-                    ))}
-                  </Select>
                 </Form.Item>
               </Col>
             </Row>
@@ -221,7 +175,7 @@ const ApiRequestTable: React.FC = () => {
                 pagination={false}
                 scroll={{ x: 600 }}
                 style={{ marginBottom: 16 }}
-                rowClassName={(index:any) =>
+                rowClassName={(_, index: number) =>
                   index % 2 === 0 ? "bg-white" : "bg-gray-50"
                 }
                 locale={{ emptyText: "Ma'lumot topilmadi" }}
@@ -230,13 +184,10 @@ const ApiRequestTable: React.FC = () => {
                 current={page}
                 pageSize={limit}
                 total={total}
-                onChange={(newPage, newPageSize) => {
+                onChange={(newPage) => {
                   setPage(newPage);
-                  setLimit(newPageSize);
                   fetchData();
                 }}
-                showSizeChanger
-                pageSizeOptions={["5", "10", "20", "50"]}
                 showQuickJumper
                 showTotal={(total) => `Jami: ${total} ta yozuv`}
                 style={{ textAlign: "right" }}
@@ -246,7 +197,7 @@ const ApiRequestTable: React.FC = () => {
             !loading && !error && (
               <Alert
                 message="Ma'lumot yo'q"
-                description="So'rovni amalga oshirish uchun yuqoridagi maydonlarni to'ldiring."
+                description="So'rovni amalga oshirish uchun yuqoridagi maydonni to'ldiring."
                 type="info"
                 showIcon
                 style={{ marginBottom: 16 }}
