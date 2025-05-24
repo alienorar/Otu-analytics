@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { FormEvent } from "react";
 import axios, { AxiosError } from "axios";
 import {
@@ -35,7 +34,7 @@ interface Contact {
 
 interface ApiResponse {
   data: Contact[];
-  total?: number; // Optional: for pagination total if API provides it
+  total?: number;
 }
 
 interface FormValues {
@@ -45,12 +44,13 @@ interface FormValues {
 const ApiRequestTable: React.FC = () => {
   const [form] = Form.useForm<FormValues>();
   const [baseUrl, setBaseUrl] = useState<string>("https://qabul.asianuniversity.uz");
-  const [page, setPage] = useState<number>(1);
-  const [limit] = useState<number>(5); // Fixed default value
+  const [page, setPage] = useState<number>();
+  const [limit] = useState<number>();
   const [responseData, setResponseData] = useState<Contact[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState<boolean>(true);
 
   const fetchData = async () => {
     setLoading(true);
@@ -73,9 +73,9 @@ const ApiRequestTable: React.FC = () => {
 
       const data = response.data.data ?? [];
       setResponseData(data);
-      setTotal(response.data.total ?? data.length); // Fallback to data length if total is not provided
+      setTotal(response.data.total ?? data.length);
     } catch (err) {
-     const errorMessage = err instanceof AxiosError && err.response?.data?.error === "utm_source parameter not found in the URL"
+      const errorMessage = err instanceof AxiosError && err.response?.data?.error === "utm_source parameter not found in the URL"
         ? "Ushbu link hech kimga tegishli emas"
         : err instanceof AxiosError
           ? err.response?.data?.message || err.message
@@ -85,8 +85,15 @@ const ApiRequestTable: React.FC = () => {
       setTotal(0);
     } finally {
       setLoading(false);
+      setIsInitialLoad(false);
     }
   };
+
+  useEffect(() => {
+    if (!isInitialLoad) {
+      fetchData();
+    }
+  }, [page]);
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -100,10 +107,10 @@ const ApiRequestTable: React.FC = () => {
 
   const columns: TableColumnsType<Contact> = responseData.length > 0
     ? Object.keys(responseData[0]).map((key) => ({
-        title: key.replace(/_/g, " "), // Format keys (e.g., LAST_NAME -> LAST NAME)
+        title: key.replace(/_/g, " "),
         dataIndex: key,
         key,
-        render: (text: string) => text || "-", // Handle null/undefined values
+        render: (text: string) => text || "-",
       }))
     : [];
 
@@ -115,7 +122,7 @@ const ApiRequestTable: React.FC = () => {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <FileDoneOutlined style={{ color: PRIMARY_COLOR, fontSize: 24 }} />
             <Title level={3} style={{ margin: 0, color: PRIMARY_COLOR }}>
-              API So‘rov Tizimi
+              API So'rov Tizimi
             </Title>
           </div>
         }
@@ -152,7 +159,7 @@ const ApiRequestTable: React.FC = () => {
                 disabled={loading}
                 style={{ backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }}
               >
-                {loading ? "Yuklanmoqda..." : "Maʼlumotlarni Olish"}
+                {loading ? "Yuklanmoqda..." : "Ma'lumotlarni Olish"}
               </Button>
             </Form.Item>
           </Form>
@@ -186,7 +193,6 @@ const ApiRequestTable: React.FC = () => {
                 total={total}
                 onChange={(newPage) => {
                   setPage(newPage);
-                  fetchData();
                 }}
                 showQuickJumper
                 showTotal={(total) => `Jami: ${total} ta yozuv`}
@@ -194,7 +200,7 @@ const ApiRequestTable: React.FC = () => {
               />
             </>
           ) : (
-            !loading && !error && (
+            !loading && !error && !isInitialLoad && (
               <Alert
                 message="Ma'lumot yo'q"
                 description="So'rovni amalga oshirish uchun yuqoridagi maydonni to'ldiring."
