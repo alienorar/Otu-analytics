@@ -1,243 +1,260 @@
-import React, { useState } from 'react';
-import axios from 'axios';
 
-const ApiRequestTable = () => {
-  const [baseUrl, setBaseUrl] = useState('https://qabul.asianuniversity.uz');
-  const [utmSource, setUtmSource] = useState('919330011');
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(5);
-  const [responseData, setResponseData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+"use client";
+
+import React, { useState } from "react";
+import type { FormEvent } from "react";
+import axios, { AxiosError } from "axios";
+import {
+  Card,
+  Form,
+  Input,
+  Select,
+  Button,
+  Table,
+  Pagination,
+  Row,
+  Col,
+  Spin,
+  Alert,
+  Typography,
+  type TableColumnsType,
+} from "antd";
+import { FileDoneOutlined } from "@ant-design/icons";
+
+const { Title } = Typography;
+const { Option } = Select;
+
+const PRIMARY_COLOR = "#1E9FD9";
+
+interface Contact {
+  ID: string;
+  LAST_NAME: string;
+  NAME: string;
+  SECOND_NAME: string;
+  UTM_SOURCE: string;
+  DATE_CREATE: string;
+}
+
+interface ApiResponse {
+  data: Contact[];
+  total?: number; // Optional: for pagination total if API provides it
+}
+
+interface FormValues {
+  baseUrl: string;
+  utmSource: string;
+  page: number;
+  limit: number;
+}
+
+const ApiRequestTable: React.FC = () => {
+  const [form] = Form.useForm<FormValues>();
+  const [baseUrl, setBaseUrl] = useState<string>("https://qabul.asianuniversity.uz");
+  const [utmSource, setUtmSource] = useState<string>("919330011");
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(5);
+  const [responseData, setResponseData] = useState<Contact[]>([]);
+  const [total, setTotal] = useState<number>(0);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      // Proxy orqali so'rov yuborish (CORS muammosini hal qilish uchun)
-      const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-      const targetUrl = 'https://bitrix-mini.asianuniversity.uz/api/contacts';
-
-      const response = await axios.post(proxyUrl + targetUrl, {
-        utm_url: `${baseUrl}?utm_source=${utmSource}`,
-        page: page,
-        limit: limit
-      }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
+      const response = await axios.post<ApiResponse>(
+        "https://bitrix-mini.asianuniversity.uz/api/contacts",
+        {
+          utm_url: `${baseUrl}?utm_source=${utmSource}`,
+          page,
+          limit,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
         }
-      });
+      );
 
-      setResponseData(response.data);
+      const data = response.data.data ?? [];
+      setResponseData(data);
+      setTotal(response.data.total ?? data.length); // Fallback to data length if total is not provided
     } catch (err) {
-      setError(err.message || 'So\'rov amalga oshirilmadi');
+      const errorMessage = err instanceof AxiosError 
+        ? err.response?.data?.message || err.message 
+        : "Noma'lum xato yuz berdi";
+      setError(errorMessage);
+      setResponseData([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    fetchData();
+    form.validateFields().then(() => {
+      setPage(1); // Reset to page 1 on new submission
+      fetchData();
+    }).catch(() => {
+      setError("Iltimos, barcha maydonlarni to'ldiring");
+    });
   };
 
+  const columns: TableColumnsType<Contact> = responseData.length > 0 
+    ? Object.keys(responseData[0]).map((key) => ({
+        title: key.replace(/_/g, " "), // Format keys (e.g., LAST_NAME -> LAST NAME)
+        dataIndex: key,
+        key,
+        render: (text: string) => text || "-", // Handle null/undefined values
+      }))
+    : [];
+
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>API So'rov Tizimi</h2>
+    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
+      <Card
+        style={{ maxWidth: 1000, width: "100%", margin: 16, boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)" }}
+        title={
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <FileDoneOutlined style={{ color: PRIMARY_COLOR, fontSize: 24 }} />
+            <Title level={3} style={{ margin: 0, color: PRIMARY_COLOR }}>
+              API So‘rov Tizimi
+            </Title>
+          </div>
+        }
+      >
+        <Spin spinning={loading}>
+          <Form 
+            form={form} 
+            onSubmitCapture={handleSubmit} 
+            layout="vertical"
+            initialValues={{ baseUrl, utmSource, page, limit }}
+          >
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={12}>
+                <Form.Item
+                  label="Asosiy URL"
+                  name="baseUrl"
+                  rules={[
+                    { required: true, message: "URL kiriting" },
+                    { type: "url", message: "To'g'ri URL kiriting" },
+                  ]}
+                >
+                  <Input
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Form.Item
+                  label="UTM Source"
+                  name="utmSource"
+                  rules={[{ required: true, message: "UTM Source kiriting" }]}
+                >
+                  <Input
+                    value={utmSource}
+                    onChange={(e) => setUtmSource(e.target.value)}
+                    placeholder="919330011"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item
+                  label="Sahifa"
+                  name="page"
+                  rules={[{ required: true, message: "Sahifa raqamini kiriting" }]}
+                >
+                  <Input
+                    type="number"
+                    min={1}
+                    value={page}
+                    onChange={(e) => setPage(Number(e.target.value))}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item
+                  label="Limit"
+                  name="limit"
+                  rules={[{ required: true, message: "Limitni tanlang" }]}
+                >
+                  <Select value={limit} onChange={(value) => setLimit(Number(value))}>
+                    {[5, 10, 20, 50].map((num) => (
+                      <Option key={num} value={num}>
+                        {num}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                disabled={loading}
+                style={{ backgroundColor: PRIMARY_COLOR, borderColor: PRIMARY_COLOR }}
+              >
+                {loading ? "Yuklanmoqda..." : "Maʼlumotlarni Olish"}
+              </Button>
+            </Form.Item>
+          </Form>
 
-      <form onSubmit={handleSubmit} style={{
-        marginBottom: '30px',
-        padding: '20px',
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        backgroundColor: '#f9f9f9'
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-          <div>
-            <label htmlFor="baseUrl" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Asosiy URL:</label>
-            <input
-              id="baseUrl"
-              type="text"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-              placeholder="https://example.com"
-              required
+          {error && (
+            <Alert
+              message="Xato"
+              description={error}
+              type="error"
+              showIcon
+              style={{ marginBottom: 16 }}
             />
-          </div>
+          )}
 
-          <div>
-            <label htmlFor="utmSource" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>UTM Source:</label>
-            <input
-              id="utmSource"
-              type="text"
-              value={utmSource}
-              onChange={(e) => setUtmSource(e.target.value)}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-              placeholder="UTM source kodi"
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="page" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Sahifa:</label>
-            <input
-              id="page"
-              type="number"
-              min="1"
-              value={page}
-              onChange={(e) => setPage(parseInt(e.target.value))}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-              required
-            />
-          </div>
-
-          <div>
-            <label htmlFor="limit" style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Limit:</label>
-            <select
-              id="limit"
-              value={limit}
-              onChange={(e) => setLimit(parseInt(e.target.value))}
-              style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="50">50</option>
-            </select>
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          style={{
-            marginTop: '15px',
-            padding: '10px 20px',
-            backgroundColor: '#4CAF50',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '16px',
-            width: '100%'
-          }}
-          disabled={loading}
-        >
-          {loading ? 'Yuklanmoqda...' : 'Ma\'lumotlarni Olish'}
-        </button>
-      </form>
-
-      {error && (
-        <div style={{
-          padding: '15px',
-          marginBottom: '20px',
-          backgroundColor: '#ffebee',
-          borderLeft: '4px solid #f44336',
-          color: '#d32f2f'
-        }}>
-          Xato: {error}
-        </div>
-      )}
-
-      {responseData.length > 0 ? (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            boxShadow: '0 0 10px rgba(0,0,0,0.1)'
-          }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f2f2f2' }}>
-                {Object.keys(responseData[0]).map((key) => (
-                  <th key={key} style={{
-                    padding: '12px 15px',
-                    textAlign: 'left',
-                    borderBottom: '1px solid #ddd'
-                  }}>
-                    {key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {responseData.map((item, index) => (
-                <tr key={index} style={{
-                  backgroundColor: index % 2 === 0 ? '#fff' : '#f9f9f9',
-                  borderBottom: '1px solid #ddd'
-                }}>
-                  {Object.values(item).map((value, i) => (
-                    <td key={i} style={{
-                      padding: '12px 15px',
-                      borderBottom: '1px solid #eee'
-                    }}>
-                      {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            marginTop: '20px',
-            alignItems: 'center'
-          }}>
-            <button
-              onClick={() => {
-                setPage(prev => Math.max(1, prev - 1));
-                fetchData();
-              }}
-              disabled={page === 1 || loading}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: page === 1 ? '#cccccc' : '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: page === 1 ? 'not-allowed' : 'pointer'
-              }}
-            >
-              Oldingi
-            </button>
-
-            <span>Sahifa: {page}</span>
-
-            <button
-              onClick={() => {
-                setPage(prev => prev + 1);
-                fetchData();
-              }}
-              disabled={loading}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#4CAF50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Keyingi
-            </button>
-          </div>
-        </div>
-      ) : (
-        !loading && !error && (
-          <div style={{
-            textAlign: 'center',
-            padding: '40px',
-            backgroundColor: '#f5f5f5',
-            borderRadius: '8px',
-            color: '#666'
-          }}>
-            Ma'lumotlar mavjud emas. So'rov yuboring.
-          </div>
-        )
-      )}
+          {responseData.length > 0 ? (
+            <>
+              <Table
+                columns={columns}
+                dataSource={responseData.map((item, index) => ({ ...item, key: item.ID || index }))}
+                pagination={false}
+                scroll={{ x: 600 }}
+                style={{ marginBottom: 16 }}
+                rowClassName={(index:any) =>
+                  index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                }
+                locale={{ emptyText: "Ma'lumot topilmadi" }}
+              />
+              <Pagination
+                current={page}
+                pageSize={limit}
+                total={total}
+                onChange={(newPage, newPageSize) => {
+                  setPage(newPage);
+                  setLimit(newPageSize);
+                  fetchData();
+                }}
+                showSizeChanger
+                pageSizeOptions={["5", "10", "20", "50"]}
+                showQuickJumper
+                showTotal={(total) => `Jami: ${total} ta yozuv`}
+                style={{ textAlign: "right" }}
+              />
+            </>
+          ) : (
+            !loading && !error && (
+              <Alert
+                message="Ma'lumot yo'q"
+                description="So'rovni amalga oshirish uchun yuqoridagi maydonlarni to'ldiring."
+                type="info"
+                showIcon
+                style={{ marginBottom: 16 }}
+              />
+            )
+          )}
+        </Spin>
+      </Card>
     </div>
   );
 };
